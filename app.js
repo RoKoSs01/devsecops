@@ -15,5 +15,5 @@ const name = req.query.name || 'World';
 res.send(`<h1>Hellooo, ${escapeHtml(name)}!</h1>`);
 });
 app.listen(port, () => {
-console.log(`🚀 App listening on http://localhost:${port}`);   
+console.log(`🚀 App listening on http://localhost:${port}`);
 });
