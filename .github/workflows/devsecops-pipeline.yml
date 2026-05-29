@@ -2,7 +2,7 @@ name: DevSecOps Pipeline (SAST + Docker Security + Multi-arch)
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
 
 jobs:
   pipeline:
