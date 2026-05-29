@@ -91,24 +91,66 @@ jobs:
           docker logs app-under-test
           exit 1
 
+            # ==================== DAST - OWASP ZAP BASELINE ====================
+      - name: Prepare writable ZAP report directory
+        shell: bash
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/zap-report"
+          chmod -R a+rwX "${GITHUB_WORKSPACE}/zap-report"
+
+      - name: Verify ZAP report directory permissions
+        shell: bash
+        run: |
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}/zap-report:/zap/wrk/:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            touch /zap/wrk/.write-test
+
+          rm -f "${GITHUB_WORKSPACE}/zap-report/.write-test"
+
       - name: Run OWASP ZAP Baseline scan
         id: zap_scan
         continue-on-error: true
         shell: bash
         run: |
-          mkdir -p zap-report
-
           docker run --rm \
             --network dast-net \
-            -v "${GITHUB_WORKSPACE}:/zap/wrk/:rw" \
+            -v "${GITHUB_WORKSPACE}/zap-report:/zap/wrk/:rw" \
             ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py \
               -t "${DAST_TARGET}/" \
-              -c .zap/baseline.conf \
               -I \
-              -r zap-report/zap-baseline.html \
-              -J zap-report/zap-baseline.json \
-              -w zap-report/zap-baseline.md
+              -r zap-baseline.html \
+              -J zap-baseline.json \
+              -w zap-baseline.md
+
+      - name: Capture container logs and stop DAST target
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "${GITHUB_WORKSPACE}/zap-report"
+          docker logs app-under-test > "${GITHUB_WORKSPACE}/zap-report/application.log" 2>&1 || true
+          docker rm -f app-under-test || true
+          docker network rm dast-net || true
+
+      - name: Upload ZAP DAST reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-baseline-report
+          path: |
+            zap-report/zap-baseline.html
+            zap-report/zap-baseline.json
+            zap-report/zap-baseline.md
+            zap-report/application.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce DAST security gate
+        if: steps.zap_scan.outcome == 'failure'
+        run: |
+          echo "DAST security gate failed. Docker image will not be published."
+          exit 1
 
       - name: Capture container logs and stop DAST target
         if: always()
